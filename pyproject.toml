@@ -41,7 +41,7 @@ convention = "pep257"
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.5.1",
     "pyrefly>=0.60.2",
     "ruff>=0.15.10",
 ]
-

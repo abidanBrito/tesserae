@@ -1,0 +1,14 @@
+name: Setup
+description: Install UV and sync project dependencies
+
+runs:
+  using: composite
+  steps:
+    - name: Install UV
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+
+    - name: Sync dependencies
+      run: uv sync --dev
+      shell: bash

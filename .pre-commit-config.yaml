@@ -29,8 +29,8 @@ repos:
   - repo: local
     hooks:
       - id: type-check
-        name: basedpyright
-        entry: uv run basedpyright .
+        name: pyrefly
+        entry: uv run pyrefly check
         language: system
         pass_filenames: false
         always_run: true

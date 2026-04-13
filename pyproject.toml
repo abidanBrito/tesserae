@@ -39,3 +39,8 @@ convention = "pep257"
 "**/__init__.py" = ["F401"]
 "tests/*" = ["D"]
 
+[dependency-groups]
+dev = [
+    "pyrefly>=0.60.2",
+]
+

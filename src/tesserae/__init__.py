@@ -1,6 +1,11 @@
-"""Just a temporary package docstring to test the CI pipeline."""
+"""Tesserae - Stitch geospatial rasters into seamless mosaics."""
 
+from importlib.metadata import version
 
-def main() -> None:
-    """Define the main entry point."""
-    print("Hello from tesserae!")
+from tesserae.io import write_raster
+
+__version__ = version("tesserae")
+
+__all__ = [
+    "write_raster",
+]

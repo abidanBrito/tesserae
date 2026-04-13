@@ -1,0 +1,41 @@
+[project]
+name = "tesserae"
+version = "0.1.0"
+description = "Stitch geospatial rasters into seamless mosaics."
+readme = "README.md"
+authors = [
+    { name = "Abidan Brito", email = "43681148+abidanBrito@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = []
+
+[project.scripts]
+tesserae = "tesserae:main"
+
+[build-system]
+requires = ["uv_build>=0.11.2,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+indent-width = 4
+line-length = 100
+
+[tool.ruff.format]
+exclude = ["*.ipynb"]
+docstring-code-format = true
+
+[tool.ruff.lint]
+exclude = ["*.ipynb"]
+ignore = ["D100", "D203", "D213", "RET503"]
+select = ["A", "B", "D", "E", "F", "I", "N", "W", "SIM", "RUF", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tesserae"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"tests/*" = ["D"]
+

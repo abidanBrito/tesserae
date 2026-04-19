@@ -117,3 +117,88 @@ def stitch(
     )
 
     return mosaic, geotransform
+
+
+def feather_blend(
+    merged_data: np.ndarray,
+    new_data: np.ndarray,
+    merged_mask: np.ndarray,
+    new_mask: np.ndarray,
+    *,
+    nodata: float,
+    feather_width: int = 5,
+    **_kwargs,
+) -> None:
+    """
+    Distance-weighted feather blending for :func:`stitch`.
+
+    Follows the ``rasterio.merge`` *method* callback signature so it can
+    be passed directly as a *blend_fn*.
+
+    Requires ``scipy``.
+
+    :param merged_data/new_data: pixel arrays. Note that *merged_data* is modified in-place.
+    :param merged_mask/new_mask: boolean masks (``True`` = nodata).
+    :param nodata: sentinel value for missing pixels.
+    :param feather_width: controls the blending ramp width (pixels).
+    """
+    try:
+        from scipy.ndimage import distance_transform_edt
+    except ImportError as e:
+        raise ImportError(
+            "feather_blend requires scipy. Install with: pip install tesserae[blend]"
+        ) from e
+
+    merged_valid = ~merged_mask
+    new_valid = ~new_mask
+    overlap = merged_valid & new_valid
+    new_only = ~merged_valid & new_valid
+
+    # Take new non-overlapping data as-is
+    np.copyto(merged_data, new_data, where=new_only)
+
+    if not np.any(overlap):
+        merged_data[~merged_valid & ~new_valid] = nodata
+        return
+
+    # Detect overlap-region boundary pixels (4-connected)
+    boundaries = np.zeros_like(overlap, dtype=bool)
+    boundaries[1:, :] |= ~overlap[1:, :] & overlap[:-1, :]
+    boundaries[:-1, :] |= ~overlap[:-1, :] & overlap[1:, :]
+    boundaries[:, 1:] |= ~overlap[:, 1:] & overlap[:, :-1]
+    boundaries[:, :-1] |= ~overlap[:, :-1] & overlap[:, 1:]
+
+    # Distance from boundary -> Blend weights
+    dist: np.ndarray = np.asarray(distance_transform_edt(overlap & ~boundaries))
+    weights = np.clip(dist / max(float(feather_width), 1.0), 0.0, 1.0)
+
+    # Weighted average in the overlap zone
+    m = np.where(merged_data == nodata, np.nan, merged_data)
+    n = np.where(new_data == nodata, np.nan, new_data)
+    blended = m * weights + n * (1.0 - weights)
+
+    merged_data[overlap] = np.where(np.isnan(blended[overlap]), nodata, blended[overlap])
+    merged_data[~merged_valid & ~new_valid] = nodata
+
+
+def make_feather_blend_fn(nodata: float, feather_width: int = 5) -> Callable:
+    """
+    Return a closure suitable for :func:`stitch`'s *blend_fn* parameter.
+
+    :param nodata: NoData sentinel value baked into the returned callback.
+    :param feather_width: blending ramp width (pixels) baked into the returned callback.
+    :return: a callable matching the ``rasterio.merge`` *method* callback signature.
+    """
+
+    def _blend(merged_data, new_data, merged_mask, new_mask, **kwargs):
+        return feather_blend(
+            merged_data,
+            new_data,
+            merged_mask,
+            new_mask,
+            nodata=nodata,
+            feather_width=feather_width,
+            **kwargs,
+        )
+
+    return _blend

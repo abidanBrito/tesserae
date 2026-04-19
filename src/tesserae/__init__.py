@@ -3,11 +3,13 @@
 from importlib.metadata import version
 
 from tesserae.io import write_raster
+from tesserae.postprocessing import clip
 from tesserae.processing import feather_blend, make_feather_blend_fn, stitch
 
 __version__ = version("tesserae")
 
 __all__ = [
+    "clip",
     "feather_blend",
     "make_feather_blend_fn",
     "stitch",

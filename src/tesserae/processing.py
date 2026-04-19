@@ -11,14 +11,15 @@ import rasterio as rio
 from rasterio.enums import Resampling
 from rasterio.merge import merge
 
-from .io import _NODATA, _extract_epsg, write_raster
+from ._common import NODATA, PathLike
+from .io import _extract_epsg, write_raster
 
 BlendFn = Callable[..., np.ndarray] | None
 
 
 def stitch(
-    paths: Sequence[str | Path],
-    output_path: str | Path,
+    paths: Sequence[PathLike],
+    output_path: PathLike,
     *,
     pixel_size: float,
     nodata: float | None = None,
@@ -83,7 +84,7 @@ def stitch(
                 memfiles.append(memfile)
                 sources.append(memfile.open())
 
-        output_nodata = nodata if nodata is not None else _NODATA
+        output_nodata = nodata if nodata is not None else NODATA
         method: Any = blend_fn if blend_fn is not None else "first"
 
         result = merge(

@@ -10,8 +10,7 @@ import rasterio as rio
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
 
-PathLike = str | Path
-_NODATA = -9999.0
+from ._common import NODATA, PathLike
 
 
 def write_raster(
@@ -20,7 +19,7 @@ def write_raster(
     epsg: int,
     path: PathLike,
     *,
-    nodata: float = _NODATA,
+    nodata: float = NODATA,
     compression: str | None = None,
     dtype: np.typing.DTypeLike | None = None,
     cog: bool = False,

@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import rasterio as rio
+from rasterio.crs import CRS
+from rasterio.enums import Resampling
 from rasterio.mask import mask
+from rasterio.warp import calculate_default_transform
+from rasterio.warp import reproject as rio_reproject
 
 from ._common import NODATA, Compression, PathLike
 
@@ -72,5 +77,73 @@ def clip(
 
     with rio.open(output_path, "w", **clipped_profile) as dst:
         dst.write(clipped)
+
+    return output_path
+
+
+def reproject(
+    raster_path: PathLike,
+    epsg: int,
+    *,
+    nodata: float,
+    output_path: PathLike | None = None,
+    resampling: Resampling = Resampling.bilinear,
+    compression: Compression | None = None,
+) -> Path:
+    """
+    Reproject a raster to *target_epsg*, skipping if already matching.
+
+    :param raster_path: input GeoTIFF file to reproject.
+    :param epsg: target EPSG code for the output CRS.
+    :param nodata: NoData sentinel value for both source and destination.
+    :param output_path: where to write the reprojected raster. Defaults to overwriting
+        *raster_path*.
+    :param resampling: resampling method applied during warping.
+    :compression: GeoTIFF compression codec. ``None`` disables compression.
+    :return: the resolved output path (possibly unchanged if the source CRS already matches).
+    """
+    raster_path = Path(raster_path)
+    output_path = Path(output_path) if output_path else raster_path
+
+    with rio.open(raster_path) as src:
+        if src.crs.to_epsg() == epsg:
+            return output_path
+
+        dst_crs = CRS.from_epsg(epsg)
+        transform, width, height = calculate_default_transform(
+            src.crs, dst_crs, src.width, src.height, *src.bounds
+        )
+        assert width is not None and height is not None
+
+        profile = src.profile.copy()
+        profile.update(
+            crs=dst_crs,
+            transform=transform,
+            width=width,
+            height=height,
+            nodata=nodata,
+        )
+
+        if compression is not None:
+            profile["compress"] = compression
+
+        dest = np.empty((src.count, height, width), dtype=src.dtypes[0])
+
+        rio_reproject(
+            source=src.read(),
+            destination=dest,
+            src_transform=src.transform,
+            src_crs=src.crs,
+            src_nodata=nodata,
+            dst_transform=transform,
+            dst_crs=dst_crs,
+            dst_nodata=nodata,
+            resampling=resampling,
+        )
+
+    # NOTE(abi): we write in a separate block so that the source handle is
+    #            closed, just in case we overwrite the input GeoTIFF file.
+    with rio.open(output_path, "w", **profile) as dst:
+        dst.write(dest)
 
     return output_path

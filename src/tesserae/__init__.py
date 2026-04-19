@@ -3,9 +3,8 @@
 from importlib.metadata import version
 
 from tesserae.io import write_raster
+from tesserae.processing import stitch
 
 __version__ = version("tesserae")
 
-__all__ = [
-    "write_raster",
-]
+__all__ = ["stitch", "write_raster"]

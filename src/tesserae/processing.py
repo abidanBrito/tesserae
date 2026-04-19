@@ -11,7 +11,7 @@ import rasterio as rio
 from rasterio.enums import Resampling
 from rasterio.merge import merge
 
-from .io import _extract_epsg, write_raster
+from .io import _NODATA, _extract_epsg, write_raster
 
 BlendFn = Callable[..., np.ndarray] | None
 
@@ -21,7 +21,7 @@ def stitch(
     output_path: str | Path,
     *,
     pixel_size: float,
-    nodata: float,
+    nodata: float | None = None,
     resampling: Resampling = Resampling.nearest,
     blend_fn: BlendFn = None,
     pad_width: int = 0,
@@ -35,7 +35,8 @@ def stitch(
     :param paths: input raster file paths.
     :param output_path: where to write the output GeoTIFF.
     :param pixel_size: target resolution in CRS units.
-    :param nodata: NoData sentinel value.
+    :param nodata: optional NoData sentinel value. If ``None`` it gets the first tiles'
+        NoData value.
     :param resampling: resampling method applied during warping.
     :param blend_fn: optional blending callback following the ``rasterio.merge``
         *method* signature. ``None`` falls back to ``"first"``.
@@ -50,11 +51,10 @@ def stitch(
     memfiles: list[rio.MemoryFile] = []
 
     try:
-        for p in paths:
-            with rio.open(str(p)) as src:
+        for path in paths:
+            with rio.open(str(path)) as src:
                 data = src.read()
                 transform = src.transform
-                tile_nodata = nodata if nodata is not None else src.nodata
 
                 if pad_width > 0:
                     padded_transform = transform
@@ -74,7 +74,6 @@ def stitch(
                     height=data.shape[1],
                     width=data.shape[2],
                     transform=transform,
-                    nodata=tile_nodata,
                 )
 
                 memfile = rio.MemoryFile()
@@ -84,11 +83,13 @@ def stitch(
                 memfiles.append(memfile)
                 sources.append(memfile.open())
 
+        output_nodata = nodata if nodata is not None else _NODATA
         method: Any = blend_fn if blend_fn is not None else "first"
+
         result = merge(
             sources,
             res=pixel_size,
-            nodata=nodata,
+            nodata=output_nodata,
             method=method,
             resampling=resampling,
             target_aligned_pixels=True,
@@ -103,7 +104,7 @@ def stitch(
         for mf in memfiles:
             mf.close()
 
-    if np.all(mosaic == nodata):
+    if np.all(mosaic == output_nodata):
         raise ValueError("Resulting mosaic contains no valid data.")
 
     write_raster(
@@ -111,7 +112,7 @@ def stitch(
         transform=geotransform,
         epsg=_extract_epsg(paths[0]),
         path=output_path,
-        nodata=nodata,
+        nodata=output_nodata,
         compression=compression,
     )
 

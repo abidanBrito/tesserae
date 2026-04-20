@@ -8,6 +8,7 @@ import numpy as np
 import rasterio as rio
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
+from rasterio.fill import fillnodata
 from rasterio.mask import mask
 from rasterio.warp import calculate_default_transform
 from rasterio.warp import reproject as rio_reproject
@@ -145,5 +146,67 @@ def reproject(
     #            closed, just in case we overwrite the input GeoTIFF file.
     with rio.open(output_path, "w", **profile) as dst:
         dst.write(dest)
+
+    return output_path
+
+
+def fill_nodata(
+    input_path: PathLike,
+    output_path: PathLike | None = None,
+    *,
+    max_search_distance: int = 100,
+    smoothing_iterations: int = 0,
+    compression: Compression | None = None,
+) -> Path:
+    """
+    Fill NoData holes via GDAL's built-in interpolation.
+
+    Uses ``rasterio.fill.fillnodata`` (backed by GDAL's ``GDALFillNodata``),
+    which performs an iterative morphological expansion of valid pixels into
+    nodata regions.
+
+    :param input_path: input GeoTIFF file to process.
+    :param output_path: destination GeoTIFF file. Defaults to overwriting *input_path*.
+    :param max_search_distance: maximum number of pixels to search in all directions
+        for valid values to interpolate from.
+    :param smoothing_iterations: number of 3x3 smoothing passes to run on the filled
+        pixels after interpolation.
+    :param compression: GeoTIFF compression codec. ``None`` disables compression.
+    :return: the resolved output path of the filled raster.
+    """
+    input_path = Path(input_path)
+    if output_path is None:
+        output_path = input_path
+
+    output_path = Path(output_path)
+
+    with rio.open(input_path) as src:
+        profile = src.profile.copy()
+        nodata = src.nodata
+        filled_bands = []
+
+        for i in range(1, src.count + 1):
+            band = src.read(i)
+            band = band.astype("float32")
+
+            if nodata is not None:
+                mask = (band != nodata).astype("uint8")
+            else:
+                mask = (~np.isnan(band)).astype("uint8")
+
+            filled = fillnodata(
+                band,
+                mask=mask,
+                max_search_distance=max_search_distance,
+                smoothing_iterations=smoothing_iterations,
+            )
+            filled_bands.append(filled)
+
+    if compression is not None:
+        profile["compress"] = compression
+
+    with rio.open(output_path, "w", **profile) as dst:
+        for i, band in enumerate(filled_bands, start=1):
+            dst.write(band, i)
 
     return output_path
